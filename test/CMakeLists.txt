@@ -1,0 +1,2 @@
+add_executable(ndt_test ndt_test.cc)
+target_link_libraries(ndt_test inc_ndt_lins)
