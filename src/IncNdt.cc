@@ -185,20 +185,19 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
     optimizer.setVerbose(true);
 
     int ninlier_num = 0;
-    for (int i = 0; i < 4; ++i) {
+
+    for (int i = 0; i < 5; i++) {
         ninlier_num = 0;
         optimizer.initializeOptimization(0);
-        optimizer.optimize(5);
-
+        optimizer.optimize(1);
         for (auto &e : ndt_edges) {
             e->computeError();
             if (e->chi2() < options_.out_lier_th_) {
                 e->setLevel(0);
                 ++ninlier_num;
-            } else
+            } else {
                 e->setLevel(1);
-            if (i == 2)
-                e->setRobustKernel(nullptr);
+            }
         }
     }
 

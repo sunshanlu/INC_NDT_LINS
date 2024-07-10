@@ -5,7 +5,7 @@ using namespace inc_ndt_lins;
 
 int main(int argc, char **argv) {
     BagIO io("/media/rookie-lu/新加卷/Dataset/ULHK/test2");
-    io.SetPointCloudCallback([](PointCloud::Ptr cloud) { return false; }, "/velodyne_points_0");
+    io.SetPointCloudCallback([](PointCloud::Ptr cloud) {}, "/velodyne_points_0");
 
     auto target_cloud = VoxelCloud(io.ReadPointCloud());
     auto source_cloud = VoxelCloud(io.ReadPointCloud());
