@@ -170,12 +170,17 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
                 continue;
 
             NDTEdge *e = new NDTEdge(voxel.mean_);
-            auto *rk = new g2o::RobustKernelHuber;
-            rk->setDelta(options_.out_lier_th_);
             e->setId(edge_id++);
             e->setVertex(0, v);
             e->setInformation(voxel.info_);
             e->setMeasurement(pb);
+            e->computeError();
+            if (e->chi2() > options_.out_lier_th_) {
+                delete e;
+                continue;
+            }
+            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+            rk->setDelta(options_.out_lier_th_);
             e->setRobustKernel(rk);
             optimizer.addEdge(e);
             ndt_edges.push_back(e);
@@ -186,7 +191,7 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
 
     int ninlier_num = 0;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
         ninlier_num = 0;
         optimizer.initializeOptimization(0);
         optimizer.optimize(1);
@@ -204,5 +209,8 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
     init_pose = v->estimate();
     return ninlier_num;
 }
+
+// todo 使用手写GN进行Ndt配准
+int IncNdt::AlignGN(PointCloud::Ptr cloud, SE3d &init_pose) {}
 
 NAMESPACE_END

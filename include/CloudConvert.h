@@ -31,6 +31,9 @@ public:
     void Process(const T &cloud_msg, FullPointCloud::Ptr &pcl_out);
     // clang-format on
 
+    /// 将全量点云转换为普通点云，用于imu失败的ndt
+    static PointCloud::Ptr Full2PointCloud(const FullPointCloud::Ptr &cloud);
+
 private:
     /// velodyne雷达点云转换处理逻辑
     void VelodyneHandler(const PointCloudPtr &cloud_msg, FullPointCloud::Ptr &pcl_out);
@@ -43,43 +46,5 @@ private:
 
     Options options_; ///< 点云转换类配置项
 };
-
-// clang-format off
-/**
- * @brief 模版参数为PointCloudPtr的特例化参数模版，对应的是ros的PointCloud2类型
- * 
- * @tparam  
- * @param cloud_msg 输入的原始点云
- * @param pcl_out   输出的全量点云数据
- */
-template <> 
-void CloudConvert::Process<PointCloudPtr>(const PointCloudPtr &cloud_msg, FullPointCloud::Ptr &pcl_out) {
-    switch (options_.cloud_type_) {
-    case CloudType::VELO:
-        VelodyneHandler(cloud_msg, pcl_out);
-        break;
-    case CloudType::OUST:
-        OustHandler(cloud_msg, pcl_out);
-        break;
-
-    default:
-        break;
-    }
-}
-// clang-format on
-
-/**
- * @brief 模版参数为大疆激光雷达CustomMsg的类型
- *
- * @tparam
- * @param cloud_msg 输入的原始点云
- * @param pcl_out   输出的全量点云数据
- */
-template <>
-void CloudConvert::Process<LivoxCloud::SharedPtr>(const LivoxCloud::SharedPtr &cloud_msg,
-                                                  FullPointCloud::Ptr &pcl_out) {
-    LivoxHandler(cloud_msg, pcl_out);
-    return;
-}
 
 NAMESPACE_END

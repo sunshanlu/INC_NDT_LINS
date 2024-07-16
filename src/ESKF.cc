@@ -5,11 +5,13 @@
 NAMESPACE_BEGIN
 
 /// 添加IMU信息
-void ESKF::AddIMU(const IMU::Ptr &imu) {
+bool ESKF::AddIMU(const IMU::Ptr &imu) {
+    last_imu_ = imu;
+
     double dt = imu->stamp_ - last_stamp_;
     if (dt < 0) {
         RCLCPP_INFO(rclcpp::get_logger("inc_ndt_lins"), "imu数据出现回退！");
-        return;
+        return false;
     }
     if (!imu_static_init_->init_success_) {
         imu_static_init_->AddIMU(imu);
@@ -17,17 +19,18 @@ void ESKF::AddIMU(const IMU::Ptr &imu) {
             InitIMUAttrib();
     }
 
-    if (!first_se3_) {
+    if (!first_se3_ && imu_static_init_->init_success_) {
         last_stamp_ = imu->stamp_;
         delta_t_ = dt;
-        last_imu_ = imu;
         Predict();
+        return true;
     }
+    return false;
 }
 
 /// 添加laser观测信息
 void ESKF::AddObserveSE3(const SE3d &Twi_observe, double stamp) {
-    double dt = stamp - last_stamp_;
+    double dt = stamp - last_laser_stamp_;
     if (dt < 0) {
         RCLCPP_INFO(rclcpp::get_logger("inc_ndt_lins"), "观测信息出现回退");
         return;
@@ -36,13 +39,17 @@ void ESKF::AddObserveSE3(const SE3d &Twi_observe, double stamp) {
     if (first_se3_) {
         first_se3_ = false;
         x_normal_.Twi_ = Twi_observe;
+        last_stamp_ = stamp;
+        last_Twi_estimate_ = Twi_observe;
+        last_laser_stamp_ = stamp;
+        return;
     }
 
     if (!first_se3_ && imu_static_init_->init_success_) {
         last_stamp_ = stamp;
-        delta_t_ = dt;
         last_Twi_estimate_ = Twi_observe;
         UpdateL();
+        last_laser_stamp_ = stamp;
     }
 }
 
@@ -75,6 +82,7 @@ void ESKF::ComputeHlJacobian() {
 
     Hl_.block<3, 3>(0, 0) = Mat3d::Identity();
     Hl_.block<3, 3>(3, 6) = Sophus::SO3d::leftJacobianInverse(-theta);
+    // Hl_.block<3, 3>(3, 6) = Mat3d::Identity();
 }
 
 /**
@@ -88,9 +96,14 @@ void ESKF::UpdateNormalState() {
     Vec3d acc = last_imu_->acc_ - options_.a_bias_;
     Vec3d gyr = last_imu_->gyr_ - options_.g_bias_;
 
-    x_normal_.Twi_.translation() += x_normal_.v_ * delta_t_ + 0.5 * (R * acc) * dt2 + 0.5 * x_normal_.g_ * dt2;
-    x_normal_.v_ += R * acc * delta_t_ + x_normal_.g_ * delta_t_;
-    x_normal_.Twi_.so3() *= x_normal_.Twi_.so3() * Sophus::SO3d::exp(gyr * delta_t_);
+    x_normal_.Twi_.translation() += x_normal_.v_ * delta_t_ + 0.5 * (R * acc) * dt2;
+    x_normal_.v_ += R * acc * delta_t_;
+    if (!imu_static_init_->options_.remove_gravity_) {
+        x_normal_.Twi_.translation() += 0.5 * x_normal_.g_ * dt2;
+        x_normal_.v_ += x_normal_.g_ * delta_t_;
+    }
+
+    x_normal_.Twi_.so3() *= Sophus::SO3d::exp(gyr * delta_t_);
     x_normal_.stamp_ = last_stamp_;
 }
 
@@ -133,7 +146,7 @@ void ESKF::Predict() {
 void ESKF::UpdateL() {
     ComputeHlJacobian();
 
-    Mat18_6d K = P_ * Hl_.transpose() * (Hl_ * P_ * Hl_.transpose() + Vl_);
+    Mat18_6d K = P_ * Hl_.transpose() * (Hl_ * P_ * Hl_.transpose() + Vl_).inverse();
 
     Vec6d z = Vec6d::Zero(), h_x = Vec6d::Zero();
     z.head<3>() = last_Twi_estimate_.translation();
@@ -189,8 +202,10 @@ void IMUStaticInit::AddIMU(const IMU::Ptr &imu) {
         ComputeMeanAndCov<Vec3d, IMU::Ptr, Mat3d>(imu_buffer_, gyr_mean, gyr_cov,
                                                   [](const IMU::Ptr &imu) -> Vec3d { return imu->gyr_; });
 
-        gravity_ = acc_mean / acc_mean.norm() * options_.gravity_norm_;
-        acc_bias_ = acc_mean - gravity_;
+        gravity_ = -acc_mean / acc_mean.norm() * options_.gravity_norm_;
+        acc_bias_ = acc_mean;
+        if (!options_.remove_gravity_)
+            acc_bias_ = acc_mean + gravity_;
         gyr_bias_ = gyr_mean;
         sigma_a_ = std::sqrt(acc_cov(0, 0));
         sigma_g_ = std::sqrt(gyr_cov(0, 0));
@@ -203,6 +218,8 @@ void IMUStaticInit::AddIMU(const IMU::Ptr &imu) {
             " bias_gyr: " << gyr_bias_.transpose() << 
             " sigma_a: " << sigma_a_ << " sigma_g: " << sigma_g_
         );
+
+        init_success_ = true;
         // clang-format on
     }
 }

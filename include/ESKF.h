@@ -28,6 +28,7 @@ struct IMU {
     Vec3d gyr_;    ///< 三轴角速度
 };
 
+/// IMU的静态初始化类
 struct IMUStaticInit {
     typedef std::shared_ptr<IMUStaticInit> Ptr;
 
@@ -36,6 +37,7 @@ struct IMUStaticInit {
         int buffer_capicity_ = 1000;  ///< 缓存IMU数据的容量
         double static_time_ = 10;     ///< 静态初始化时间
         double gravity_norm_ = 9.81;  ///< 重力加速度模长
+        bool remove_gravity_ = false; ///< IMU数据是否去除重力
     };
 
     IMUStaticInit(Options options)
@@ -76,9 +78,17 @@ struct IMUStaticInit {
     double sigma_g_; ///< 陀螺仪标准差
 };
 
+class LooselyLio;
+
 /// 误差状态卡尔曼求解器
 class ESKF {
+    friend class LooselyLio;
+
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    typedef std::shared_ptr<ESKF> Ptr;
+
     /// ESKF配置项
     struct Options {
         Vec3d gravity_;              ///< 重力加速度
@@ -88,14 +98,15 @@ public:
         double sigma_g_;             ///< 陀螺仪标准差
         double sigma_a_bias_ = 1e-4; ///< 加速度计偏置标准差
         double sigma_g_bias_ = 1e-8; ///< 陀螺仪偏置标准差
-        double sigma_laser_t;        ///< SE3观测模型的位置标准差
-        double sigma_laser_r;        ///< SE3观测模型的旋转标准差
+        double sigma_laser_t = 0.01; ///< SE3观测模型的位置标准差
+        double sigma_laser_r = 0.01; ///< SE3观测模型的旋转标准差
     };
 
     ESKF(IMUStaticInit::Options options = IMUStaticInit::Options())
         : last_imu_(nullptr)
         , delta_t_(0)
         , last_stamp_(0)
+        , last_laser_stamp_(0)
         , F_(Mat18d::Identity())
         , Q_(Mat18d::Zero())
         , Vl_(Mat6d::Zero())
@@ -106,7 +117,7 @@ public:
     }
 
     /// 添加IMU信息
-    void AddIMU(const IMU::Ptr &imu);
+    bool AddIMU(const IMU::Ptr &imu);
 
     /// 添加laser观测信息
     void AddObserveSE3(const SE3d &Twi_observe, double stamp);
@@ -114,8 +125,19 @@ public:
     /// ESKF预测阶段
     void Predict();
 
+    /// 用于最后一个imu数据到laser-end-time的状态预测
+    void Predice2stamp(const double &laser_end_time) {
+        delta_t_ = laser_end_time - last_stamp_;
+        Predict();
+    }
+
+    /// 获取状态的加速度信息
+    Vec3d GetAccerate() { return last_imu_->acc_; }
+
     /// ESKF更新阶段
     void UpdateL();
+
+    bool ImuInitSuccess() { return imu_static_init_->init_success_; }
 
     /// 设置ESKF系统的噪声选项
     void SetNoise(double acc_bias_var, double gyr_bias_var, double laser_p_var, double laser_r_var) {
@@ -124,6 +146,8 @@ public:
         options_.sigma_laser_t = laser_p_var;
         options_.sigma_laser_r = laser_r_var;
     }
+
+    SE3d GetTwi() { return x_normal_.Twi_; }
 
 private:
     /// 初始化优化IMU的属性信息
@@ -144,10 +168,11 @@ private:
     /// 根据配置信息构建噪声的协方差矩阵
     void BuildNoise();
 
-    IMU::Ptr last_imu_;      ///< 最新的imu数据信息
-    double delta_t_;         ///< 预测时间间隔
-    double last_stamp_;      ///< ESKF滤波器最新的时间戳信息
-    SE3d last_Twi_estimate_; ///< 最新的SE3观测信息
+    IMU::Ptr last_imu_;       ///< 最新的imu数据信息
+    double delta_t_;          ///< 预测时间间隔
+    double last_stamp_;       ///< ESKF滤波器最新的时间戳信息
+    double last_laser_stamp_; ///< 上一次雷达观测数据时间戳
+    SE3d last_Twi_estimate_;  ///< 最新的SE3观测信息
 
     Mat18d F_;    ///< 运动模型雅可比矩阵
     Mat18d Q_;    ///< 运动模型噪声协方差矩阵

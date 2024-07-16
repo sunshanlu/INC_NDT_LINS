@@ -29,7 +29,7 @@ target_link_libraries(inc_ndt_lins ${PCL_LIBRARIES} Sophus::Sophus g2o_core
                       g2o_stuff livox_ros_driver2 TBB::tbb)
 ament_target_dependencies(inc_ndt_lins rclcpp sensor_msgs rosbag2_cpp)
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/example)
 
 if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)

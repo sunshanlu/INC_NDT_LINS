@@ -11,6 +11,7 @@
 #include <pcl/impl/pcl_base.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sophus/se3.hpp>
 
@@ -38,6 +39,7 @@ typedef g2o::BlockSolverX BlockSolver;
 typedef g2o::LinearSolverEigen<BlockSolver::PoseMatrixType> LinearSolver;
 typedef g2o::OptimizationAlgorithmLevenberg Levenberg;
 typedef sensor_msgs::msg::PointCloud2 PointCloudMsg;
+typedef sensor_msgs::msg::Imu ImuMsg;
 typedef PointCloudMsg::SharedPtr PointCloudPtr;
 typedef livox_ros_driver2::msg::CustomMsg LivoxCloud;
 
@@ -47,9 +49,12 @@ struct hash_vec3i {
     }
 };
 
-Vec3d to_vec3d(const PointT &p);
-
 // clang-format off
+template <typename PointType> 
+Vec3d to_vec3d(const PointType &p) { 
+    return Vec3d(p.x, p.y, p.z); 
+}
+
 /**
  * @brief 计算Eigen向量的均值和协方差函数模版
  *

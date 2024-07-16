@@ -67,6 +67,9 @@ public:
     /// 对点云进行配准
     int AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose);
 
+    /// 使用手写GN进行点云配准
+    int AlignGN(PointCloud::Ptr cloud, SE3d &init_pose);
+
 private:
     VoxelList voxels_;               ///< 所有的体素集合
     VoexlHashMap voxels_map_;        ///< 体素哈希表

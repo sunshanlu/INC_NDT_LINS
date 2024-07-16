@@ -8,6 +8,7 @@ NAMESPACE_BEGIN
 class Tracker {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    typedef std::shared_ptr<Tracker> Ptr;
 
     /// 用来描述跟踪状态
     enum class TrackState {
@@ -33,6 +34,12 @@ public:
     /// 设置可视化器
     void SetViewer(Viewer::Ptr viewer) { viewer_ = std::move(viewer); }
 
+    /// 设置使用采用恒速模型跟踪
+    void SetTrackMotion(bool track_motion) { track_motion_ = track_motion; }
+
+    /// 设置当前位姿
+    void SetCurrPose(SE3d pose) { curr_pose_ = std::move(pose); }
+
 private:
     /// 使用恒速模型跟踪
     void TrackMotionModel(const PointCloud::Ptr &cloud, SE3d &Twl);
@@ -45,8 +52,10 @@ private:
     TrackState state_;    ///< 跟踪状态
     SE3d velocity_;       ///< 速度信息Tlc
     SE3d last_pose_;      ///< 上一次估计位姿
+    SE3d curr_pose_;      ///< 当前位姿估计
     Options options_;     ///< Tracker配置项
     int frame_cnt_;       ///< 帧计数，判断是否添加新的关键帧
+    bool track_motion_;   ///< 使用进行恒速模型跟踪
 };
 
 NAMESPACE_END

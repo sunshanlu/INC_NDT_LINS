@@ -8,7 +8,8 @@ NAMESPACE_BEGIN
 Tracker::Tracker(const Options &options)
     : state_(TrackState::NOT_INIT)
     , options_(options)
-    , frame_cnt_(0) {
+    , frame_cnt_(0)
+    , track_motion_(true) {
     inc_ndt_ = std::make_shared<IncNdt>(options.ndt_options_);
 }
 
@@ -17,6 +18,7 @@ void Tracker::AddCloud(const PointCloud::Ptr &cloud, SE3d &Twl) {
     case TrackState::NOT_INIT:
         inc_ndt_->AddCloud(cloud);
         state_ = TrackState::TRACKED;
+        Twl = SE3d();
         break;
 
     case TrackState::TRACKED:
@@ -35,8 +37,9 @@ void Tracker::AddCloud(const PointCloud::Ptr &cloud, SE3d &Twl) {
  * @param Twl   输出的配准位姿
  */
 void Tracker::TrackMotionModel(const PointCloud::Ptr &cloud, SE3d &Twl) {
-    SE3d curr_pose = last_pose_ * velocity_;
-    int ninlier = inc_ndt_->AlignG2O(cloud, curr_pose);
+    if (track_motion_)
+        curr_pose_ = last_pose_ * velocity_;
+    int ninlier = inc_ndt_->AlignG2O(cloud, curr_pose_);
     ++frame_cnt_;
     if (ninlier < 10) {
         RCLCPP_ERROR(rclcpp::get_logger("inc_ndt_lins"), "跟踪比例为: %d", ninlier);
@@ -46,20 +49,20 @@ void Tracker::TrackMotionModel(const PointCloud::Ptr &cloud, SE3d &Twl) {
 
     PointCloud::Ptr cloud_world = pcl::make_shared<PointCloud>();
     if (viewer_) {
-        pcl::transformPointCloud(*cloud, *cloud_world, curr_pose.matrix());
-        viewer_->SetPoseAndCloud(curr_pose, cloud_world);
+        pcl::transformPointCloud(*cloud, *cloud_world, curr_pose_.matrix());
+        viewer_->SetPoseAndCloud(curr_pose_, cloud_world);
     }
 
-    if (IsKeyframe(curr_pose)) {
+    if (IsKeyframe(curr_pose_)) {
         frame_cnt_ = 0;
         if (!viewer_)
-            pcl::transformPointCloud(*cloud, *cloud_world, curr_pose.matrix());
+            pcl::transformPointCloud(*cloud, *cloud_world, curr_pose_.matrix());
         inc_ndt_->AddCloud(cloud_world);
     }
 
-    Twl = curr_pose;
-    velocity_ = last_pose_.inverse() * curr_pose;
-    last_pose_ = curr_pose;
+    Twl = curr_pose_;
+    velocity_ = last_pose_.inverse() * curr_pose_;
+    last_pose_ = curr_pose_;
 }
 
 /**
