@@ -53,6 +53,7 @@ private:
     SE3d velocity_;       ///< 速度信息Tlc
     SE3d last_pose_;      ///< 上一次估计位姿
     SE3d curr_pose_;      ///< 当前位姿估计
+    SE3d last_key_pose_;  ///< 上一关键帧位姿
     Options options_;     ///< Tracker配置项
     int frame_cnt_;       ///< 帧计数，判断是否添加新的关键帧
     bool track_motion_;   ///< 使用进行恒速模型跟踪

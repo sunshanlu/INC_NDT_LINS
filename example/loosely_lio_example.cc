@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     loosely_lio->SetESKF(eskf);
     loosely_lio->SetNdtLo(ndt_lo);
 
-    BagIO io("/media/rookie-lu/新加卷/Dataset/ULHK/test2");
+    BagIO io("/media/rookie-lu/新加卷/Dataset/ULHK/test3");
     io.SetPointCloudCallback(
           [&](FullPointCloud::Ptr cloud, double stamp) {
               SE3d Twi;

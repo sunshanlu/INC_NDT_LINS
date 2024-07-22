@@ -82,7 +82,6 @@ void ESKF::ComputeHlJacobian() {
 
     Hl_.block<3, 3>(0, 0) = Mat3d::Identity();
     Hl_.block<3, 3>(3, 6) = Sophus::SO3d::leftJacobianInverse(-theta);
-    // Hl_.block<3, 3>(3, 6) = Mat3d::Identity();
 }
 
 /**
@@ -265,6 +264,8 @@ void ESKF::BuildNoise() {
     double la2 = options_.sigma_laser_r * options_.sigma_laser_r;
 
     Vl_.diagonal() << lp2, lp2, lp2, la2, la2, la2;
+
+    P_ = Mat18d::Identity() * 1e-4;
 }
 
 NAMESPACE_END

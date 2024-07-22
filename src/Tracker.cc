@@ -18,7 +18,7 @@ void Tracker::AddCloud(const PointCloud::Ptr &cloud, SE3d &Twl) {
     case TrackState::NOT_INIT:
         inc_ndt_->AddCloud(cloud);
         state_ = TrackState::TRACKED;
-        Twl = SE3d();
+        last_pose_ = last_key_pose_ = Twl = SE3d();
         break;
 
     case TrackState::TRACKED:
@@ -55,6 +55,7 @@ void Tracker::TrackMotionModel(const PointCloud::Ptr &cloud, SE3d &Twl) {
 
     if (IsKeyframe(curr_pose_)) {
         frame_cnt_ = 0;
+        last_key_pose_ = curr_pose_;
         if (!viewer_)
             pcl::transformPointCloud(*cloud, *cloud_world, curr_pose_.matrix());
         inc_ndt_->AddCloud(cloud_world);
@@ -76,12 +77,12 @@ bool Tracker::IsKeyframe(const SE3d &curr_pose) {
     if (frame_cnt_ > 10)
         return true;
 
-    Vec3d delta_t = curr_pose.translation() - last_pose_.translation();
+    Vec3d delta_t = curr_pose.translation() - last_key_pose_.translation();
     double delta_position = delta_t.lpNorm<2>();
     if (delta_position > options_.delta_position_)
         return true;
 
-    Vec3d delta_r = (last_pose_.inverse() * curr_pose).so3().log();
+    Vec3d delta_r = (last_key_pose_.inverse() * curr_pose).so3().log();
     double delta_angle = delta_r.lpNorm<2>();
     if (delta_angle > options_.delta_angle_)
         return true;

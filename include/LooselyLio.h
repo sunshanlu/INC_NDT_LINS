@@ -8,6 +8,7 @@ NAMESPACE_BEGIN
 
 class LooselyLio {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     typedef std::shared_ptr<LooselyLio> Ptr;
 
     LooselyLio(SE3d Tli)

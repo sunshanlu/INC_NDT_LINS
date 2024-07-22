@@ -6,3 +6,6 @@ target_link_libraries(loosely_lio_example inc_ndt_lins)
 
 add_executable(data_stamp_test data_stamp_test.cc)
 target_link_libraries(data_stamp_test inc_ndt_lins)
+
+add_executable(iekf_lio_example iekf_lio_example.cc)
+target_link_libraries(iekf_lio_example inc_ndt_lins)

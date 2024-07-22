@@ -1,5 +1,7 @@
 #pragma once
 
+// todo 这里写的ESKF代码部分比较冗余，会与上层系统重合，需要重构
+
 #include <rclcpp/rclcpp.hpp>
 
 #include "Common.hpp"
@@ -10,10 +12,10 @@ NAMESPACE_BEGIN
 struct NavState {
     double stamp_;
     SE3d Twi_;
-    Vec3d v_;
-    Vec3d bg_;
-    Vec3d ba_;
-    Vec3d g_;
+    Vec3d v_ = Vec3d::Zero();
+    Vec3d bg_ = Vec3d::Zero();
+    Vec3d ba_ = Vec3d::Zero();
+    Vec3d g_ = Vec3d::Zero();
 
     void Update(const Vec18d &dx, double stamp);
 };

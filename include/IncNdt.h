@@ -33,7 +33,7 @@ public:
 
         /// 初始化体素正态分布属性
         void InitAttribute(const PointCloud::Ptr &cloud);
-        
+
         void SetInfo();
 
         Mat3d cov_;  ///< 体素协方差矩阵
@@ -47,6 +47,7 @@ public:
 
     /// IncNdt算法配置项
     struct Options {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         double voxel_size_;      ///< 体素尺寸
         double voxel_size_inv_;  ///< 体素尺寸的倒数
         int voxel_capacity_;     ///< 体素容量
@@ -67,8 +68,8 @@ public:
     /// 对点云进行配准
     int AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose);
 
-    /// 使用手写GN进行点云配准
-    int AlignGN(PointCloud::Ptr cloud, SE3d &init_pose);
+    /// 获取点云中的重要矩阵信息
+    void GetHessian(const PointCloud::Ptr &cloud, const SE3d &Twl, Mat18d &HTVH, Vec18d &HTVr);
 
 private:
     VoxelList voxels_;               ///< 所有的体素集合

@@ -1,3 +1,4 @@
+#include <execution>
 #include <functional>
 #include <unordered_set>
 
@@ -210,7 +211,73 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
     return ninlier_num;
 }
 
-// todo 使用手写GN进行Ndt配准
-int IncNdt::AlignGN(PointCloud::Ptr cloud, SE3d &init_pose) {}
+/// 获取点云中的重要矩阵信息
+void IncNdt::GetHessian(const PointCloud::Ptr &cloud, const SE3d &Twl, Mat18d &HTVH, Vec18d &HTVr) {
+    int pts_num = 1;
+    if (options_.nearby_type_ == NearbyType::NEARBY6)
+        pts_num = 7;
+
+    std::vector<int> indices(cloud->size());
+    std::vector<bool> point_valid(cloud->size() * pts_num, true);
+
+    /// 保存不同点的雅可比矩阵和残差
+    std::vector<Mat3_6d, Eigen::aligned_allocator<Mat3_6d>> jacobians(cloud->size() * pts_num, Mat3_6d::Zero());
+    std::vector<Vec3d, Eigen::aligned_allocator<Vec3d>> residuals(cloud->size() * pts_num, Vec3d::Zero());
+    std::vector<Mat3d, Eigen::aligned_allocator<Mat3d>> infos(cloud->size() * pts_num, Mat3d::Zero());
+
+    std::for_each(indices.begin(), indices.end(), [id = 0](int &idx) mutable { idx = id++; });
+    std::for_each(std::execution::par_unseq, indices.begin(), indices.end(), [&](const int &idx) {
+    // std::for_each(indices.begin(), indices.end(), [&](const int &idx) {
+        Vec3d pl = to_vec3d(cloud->points[idx]);
+        Vec3d pw = Twl * pl;
+
+        Vec3i key = (pw * options_.voxel_size_inv_).cast<int>();
+        for (int id = 0; id < pts_num; ++id) {
+            int total_id = idx * pts_num + id;
+            const auto &n = nearby_keys_[id];
+            Vec3i new_key = key + n;
+            auto map_iter = voxels_map_.find(new_key);
+            if (map_iter == voxels_map_.end()) {
+                point_valid[total_id] = false;
+                continue;
+            }
+            const Voxel3d &voxel = map_iter->second->second;
+            if (!voxel.estimated_info_) {
+                point_valid[total_id] = false;
+                continue;
+            }
+
+            Vec3d res = pw - voxel.mean_;
+            double chi2 = res.transpose() * voxel.info_ * res;
+            if (std::isnan(chi2) || chi2 > options_.out_lier_th_) {
+                point_valid[total_id] = false;
+                continue;
+            }
+            Mat3d dr_dR = -Twl.so3().matrix() * Sophus::SO3d::hat(pl);
+            Mat3d dr_dt = Mat3d::Identity();
+            jacobians[total_id].block<3, 3>(0, 0) = dr_dt;
+            jacobians[total_id].block<3, 3>(0, 3) = dr_dR;
+
+            residuals[total_id] = res;
+            infos[total_id] = voxel.info_;
+        }
+    });
+
+    HTVH.setZero();
+    HTVr.setZero();
+
+    for (int i = 0; i < cloud->size() * pts_num; ++i) {
+        if (!point_valid[i])
+            continue;
+
+        // todo 这里是否需要乘dx/dδx?
+        Mat3_18d J = Mat3_18d::Zero();
+        J.block<3, 3>(0, 0) = jacobians[i].block<3, 3>(0, 0);
+        J.block<3, 3>(0, 6) = jacobians[i].block<3, 3>(0, 3);
+
+        HTVH += J.transpose() * infos[i] * J;
+        HTVr += -J.transpose() * infos[i] * residuals[i];
+    }
+}
 
 NAMESPACE_END
