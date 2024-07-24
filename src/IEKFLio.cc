@@ -33,7 +33,7 @@ void IEKFLio::AddIMU(const IMU::Ptr &imu) {
         iekf_->Predict2stamp(end_time_buffer_[1]);
 
         PointCloud::Ptr undistort_cloud = UndistortCloud(cloud_buffer_[1], start_time_buffer_[1]);
-        undistort_cloud = VoxelCloud(undistort_cloud, 0.1);
+        undistort_cloud = VoxelCloud(undistort_cloud, 0.5);
         PointCloud::Ptr imu_cloud = pcl::make_shared<PointCloud>();
         pcl::transformPointCloud(*undistort_cloud, *imu_cloud, options_.Tli_.inverse().matrix().cast<float>());
 
@@ -76,7 +76,7 @@ void IEKFLio::AddCloud(const FullPointCloud::Ptr &cloud, double laser_start_stam
 
     if (first_laser_) {
         PointCloud::Ptr pcl_cloud = CloudConvert::Full2PointCloud(cloud);
-        pcl_cloud = VoxelCloud(pcl_cloud, 0.1);
+        pcl_cloud = VoxelCloud(pcl_cloud, 0.5);
         PointCloud::Ptr point_cloud = pcl::make_shared<PointCloud>();
         pcl::transformPointCloud(*pcl_cloud, *point_cloud, options_.Tli_.inverse().matrix().cast<float>());
         inc_ndt_->AddCloud(point_cloud);

@@ -2,7 +2,7 @@
 
 #include "Common.hpp"
 #include "ESKF.h"
-#include "Tracker.h"
+#include "IncNdtLo.h"
 
 NAMESPACE_BEGIN
 
@@ -24,7 +24,7 @@ public:
     void AddCloud(const FullPointCloud::Ptr &cloud, const double &laser_start_time);
 
     /// 设置ndt里程计
-    void SetNdtLo(Tracker::Ptr ndt_lo) { ndt_lo_ = std::move(ndt_lo); }
+    void SetNdtLo(IncNdtLo::Ptr ndt_lo) { ndt_lo_ = std::move(ndt_lo); }
 
     /// 设置ESKF
     void SetESKF(ESKF::Ptr eskf) { eskf_ = std::move(eskf); }
@@ -46,7 +46,7 @@ private:
     std::deque<double> start_time_buffer_;         ///< 雷达开始时间戳缓冲区
     std::deque<double> end_time_buffer_;           ///< 雷达结束时间戳缓冲区
 
-    Tracker::Ptr ndt_lo_; ///< 基于inc_ndt的激光里程计
+    IncNdtLo::Ptr ndt_lo_; ///< 基于inc_ndt的激光里程计
     ESKF::Ptr eskf_;      ///< 误差状态卡尔曼滤波器
     SE3d Tli_;            ///< 雷达系到IMU系的变换
     bool first_se3_;      ///< 是否是第一次添se3观测信息

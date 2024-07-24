@@ -25,10 +25,11 @@ public:
     };
 
     IMUPreintegration(Options options)
-        : dR_(SO3d())
+        : integrate_time_(0)
+        , dR_(SO3d())
         , dv_(Vec3d::Zero())
         , dp_(Vec3d::Zero())
-        , cov_(Mat9d::Identity() * 1e-4)
+        , cov_(Mat9d::Zero())
         , bias_cov_(Mat6d::Zero())
         , dr_dbg_(Mat3d::Zero())
         , dv_dba_(Mat3d::Zero())
@@ -46,16 +47,19 @@ public:
     /// 积分api
     void Integrate(const IMU::Ptr &imu, double stamp);
 
-    void Reset() {
+    void Reset(const Vec3d &bg, const Vec3d &ba) {
         dR_ = SO3d();
         dv_ = Vec3d::Zero();
         dp_ = Vec3d::Zero();
-        cov_ = Mat9d::Identity() * 1e-4;
+        cov_ = Mat9d::Zero();
         dr_dbg_.setZero();
         dv_dba_.setZero();
         dv_dbg_.setZero();
         dp_dba_.setZero();
         dp_dbg_.setZero();
+        acc_bias_ = ba;
+        gyr_bias_ = bg;
+        integrate_time_ = 0;
     }
 
     /// 输入改变的bg，获取dR的修正输出
@@ -98,7 +102,8 @@ private:
     Vec3d acc_remove_bias_; ///< 去除偏置的加速度计读数
     Vec3d gyr_remove_bias_; ///< 去除偏置的陀螺仪读数
     double last_stamp_;     ///< 预积分系统时间戳
-    double dt_;             ///< 积分时间
+    double dt_;             ///< 每次积分时的子时间
+    double integrate_time_; ///< 积分时间
 
     SO3d last_dR_;  ///< 预积分之前的dr
     SO3d delta_dr_; ///< 旋转部分的更新量

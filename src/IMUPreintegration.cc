@@ -13,13 +13,17 @@ NAMESPACE_BEGIN
  */
 void IMUPreintegration::Integrate(const IMU::Ptr &imu, double stamp) {
     last_imu_ = imu;
+
     dt_ = stamp - last_stamp_;
+    integrate_time_ += dt_;
     last_stamp_ = stamp;
     acc_remove_bias_ = last_imu_->acc_ - acc_bias_;
     gyr_remove_bias_ = last_imu_->gyr_ - gyr_bias_;
     hat_acc_ = SO3d::hat(acc_remove_bias_);
 
     UpdateDeltaState();
+    UpdateCov();
+    UpdateJacobian();
 }
 
 /**
@@ -49,7 +53,7 @@ void IMUPreintegration::UpdateCov() {
     A.block<3, 3>(6, 0) = -0.5 * last_dR_.matrix() * hat_acc_ * dt_ * dt_;
     A.block<3, 3>(6, 3) = Mat3d::Identity() * dt_;
 
-    B.block<3, 3>(0, 0) = SO3d::leftJacobianInverse(-(gyr_remove_bias_ * dt_));
+    B.block<3, 3>(0, 0) = SO3d::leftJacobian(-gyr_remove_bias_ * dt_) * dt_;
     B.block<3, 3>(3, 3) = last_dR_.matrix() * dt_;
     B.block<3, 3>(6, 3) = 0.5 * last_dR_.matrix() * dt_ * dt_;
 
@@ -65,7 +69,7 @@ void IMUPreintegration::UpdateJacobian() {
     dp_dba_ = dp_dba_ + dv_dba_ * dt_ - 0.5 * last_dR_.matrix() * dt_ * dt_;
     dv_dbg_ = dv_dbg_ - last_dR_.matrix() * hat_acc_ * dr_dbg_ * dt_;
     dv_dba_ = dv_dba_ - last_dR_.matrix() * dt_;
-    dr_dbg_ = delta_dr_.inverse().matrix() * dr_dbg_ - SO3d::leftJacobianInverse(-gyr_remove_bias_ * dt_);
+    dr_dbg_ = delta_dr_.inverse().matrix() * dr_dbg_ - SO3d::leftJacobian(-gyr_remove_bias_ * dt_) * dt_;
 }
 
 /**
@@ -80,15 +84,19 @@ NavState IMUPreintegration::Predict(const NavState &state_i) {
     const Vec3d &pi = state_i.Twi_.translation();
 
     NavState new_state;
-    new_state.stamp_ = state_i.stamp_ + dt_;
+    new_state.stamp_ = state_i.stamp_ + integrate_time_;
     new_state.Twi_.so3() = state_i.Twi_.so3() * dR_;
     new_state.v_ = Ri * dv_ + vi;
     if (!options_.remove_gravity_)
-        new_state.v_ += options_.gravity_ * dt_;
+        new_state.v_ += options_.gravity_ * integrate_time_;
 
-    new_state.Twi_.translation() = Ri * dp_ + vi * dt_ + pi;
+    new_state.Twi_.translation() = Ri * dp_ + vi * integrate_time_ + pi;
     if (!options_.remove_gravity_)
-        new_state.Twi_.translation() += 0.5 * options_.gravity_ * dt_ * dt_;
+        new_state.Twi_.translation() += 0.5 * options_.gravity_ * integrate_time_ * integrate_time_;
+
+    new_state.ba_ = state_i.ba_;
+    new_state.bg_ = state_i.bg_;
+    new_state.g_ = state_i.g_;
     return new_state;
 }
 

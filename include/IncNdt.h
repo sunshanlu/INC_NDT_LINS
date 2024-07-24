@@ -75,7 +75,7 @@ private:
     VoxelList voxels_;               ///< 所有的体素集合
     VoexlHashMap voxels_map_;        ///< 体素哈希表
     std::vector<Vec3i> nearby_keys_; ///< 周围体素
-    Options options_;                ///< 增量ndt算法配置项
+    Options options_;                ///< 增量ndt算法配置
 };
 
 /**

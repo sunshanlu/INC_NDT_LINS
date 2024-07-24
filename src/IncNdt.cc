@@ -146,8 +146,8 @@ void IncNdt::Voxel3d::SetInfo() {
  */
 int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
     Optimizer optimizer;
-    Levenberg *lm = new Levenberg(std::make_unique<BlockSolver>(std::make_unique<LinearSolver>()));
-    optimizer.setAlgorithm(lm);
+    GaussNewton *gn = new GaussNewton(std::make_unique<BlockSolver>(std::make_unique<LinearSolver>()));
+    optimizer.setAlgorithm(gn);
 
     SE3Vertex *v = new SE3Vertex;
     v->setId(0);
@@ -180,9 +180,9 @@ int IncNdt::AlignG2O(PointCloud::Ptr cloud, SE3d &init_pose) {
                 delete e;
                 continue;
             }
-            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-            rk->setDelta(options_.out_lier_th_);
-            e->setRobustKernel(rk);
+            // g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+            // rk->setDelta(options_.out_lier_th_);
+            // e->setRobustKernel(rk);
             optimizer.addEdge(e);
             ndt_edges.push_back(e);
         }

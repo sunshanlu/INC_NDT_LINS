@@ -16,7 +16,7 @@ void LooselyLio::AddIMU(const IMU::Ptr &imu) {
         return;
     }
 
-    if (!eskf_->ImuInitSuccess() || first_se3_)
+    if (first_se3_)
         return;
 
     if ((imu->stamp_ > end_time_buffer_.front() && laser_buffer_.size() < 2) ||
@@ -27,7 +27,7 @@ void LooselyLio::AddIMU(const IMU::Ptr &imu) {
         PublishNavState();
     } else if (laser_buffer_.size() >= 2 && imu->stamp_ >= end_time_buffer_[1]) {
         undistort_cloud_ = UndistortCloud(laser_buffer_[1], start_time_buffer_[1]);
-        
+
         Align();
 
         laser_buffer_.pop_front();
@@ -54,7 +54,7 @@ void LooselyLio::AddCloud(const FullPointCloud::Ptr &cloud, const double &laser_
     if (first_se3_) {
         SE3d Twl;
         PointCloud::Ptr first_cloud = CloudConvert::Full2PointCloud(cloud);
-        ndt_lo_->AddCloud(VoxelCloud(first_cloud, 0.5), Twl);
+        ndt_lo_->AddCloud(VoxelCloud(first_cloud, 0.1), Twl, true);
         first_se3_ = false;
         eskf_->AddObserveSE3(Tli_, end_time_buffer_.front());
         PublishNavState();
@@ -162,8 +162,8 @@ void LooselyLio::PublishNavState() {
 void LooselyLio::Align() {
     PointCloud::Ptr pcl_out = VoxelCloud(undistort_cloud_, 0.1);
     eskf_->Predice2stamp(end_time_buffer_[1]);
-    SE3d pose_predict = eskf_->GetTwi();
-    ndt_lo_->AddCloud(pcl_out, pose_predict);
+    SE3d pose_predict = eskf_->GetTwi() * Tli_.inverse();
+    ndt_lo_->AddCloud(pcl_out, pose_predict, true);
     eskf_->AddObserveSE3(pose_predict * Tli_, end_time_buffer_[1]);
 }
 

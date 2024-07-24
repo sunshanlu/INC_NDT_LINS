@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include <g2o/core/block_solver.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/core/optimization_algorithm_gauss_newton.h>
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
 #include <pcl/impl/pcl_base.hpp>
@@ -29,6 +30,8 @@ typedef Sophus::SO3d SO3d;
 typedef Eigen::Matrix3d Mat3d;
 typedef Eigen::Vector3d Vec3d;
 typedef Eigen::Vector3i Vec3i;
+typedef Eigen::Matrix<double, 24, 24> Mat24d;
+typedef Eigen::Matrix<double, 30, 30> Mat30d;
 typedef Eigen::Matrix<double, 9, 1> Vec9d;
 typedef Eigen::Matrix<double, 9, 9> Mat9d;
 typedef Eigen::Matrix<double, 15, 1> Vec15d;
@@ -51,6 +54,7 @@ typedef g2o::SparseOptimizer Optimizer;
 typedef g2o::BlockSolverX BlockSolver;
 typedef g2o::LinearSolverEigen<BlockSolver::PoseMatrixType> LinearSolver;
 typedef g2o::OptimizationAlgorithmLevenberg Levenberg;
+typedef g2o::OptimizationAlgorithmGaussNewton GaussNewton;
 typedef sensor_msgs::msg::PointCloud2 PointCloudMsg;
 typedef sensor_msgs::msg::Imu ImuMsg;
 typedef PointCloudMsg::SharedPtr PointCloudPtr;
@@ -107,6 +111,9 @@ void ComputeMeanAndCov(const std::vector<ContentType> &v, DataType &mean, CovTyp
 
 /// 使用体素滤波器，对点云进行滤波
 PointCloud::Ptr VoxelCloud(PointCloud::Ptr cloud, float voxel_size = 0.1);
+
+/// 矩阵的边缘化操作
+Eigen::MatrixXd Marginalize(const Eigen::MatrixXd &H, const int &start, const int &end);
 
 /// @brief 全量信息点
 struct FullPoint {

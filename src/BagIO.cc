@@ -27,22 +27,24 @@ BagIO &BagIO::SetPointCloudCallback(const PointCloudCallback &callback, const st
         rclcpp::SerializedMessage sm(*meta_data->serialized_data);
         auto point_cloud = std::make_shared<PointCloudMsg>();
         auto livox_cloud = std::make_shared<LivoxCloud>();
+        double stamp = 0;
         switch (options.cloud_type_) {
         case CloudConvert::CloudType::VELO:
         case CloudConvert::CloudType::OUST:
             laser_serializer_.deserialize_message(&sm, point_cloud.get());
             convert_map_[topic_name]->Process(point_cloud, pcl_cloud);
+            stamp = point_cloud->header.stamp.sec + point_cloud->header.stamp.nanosec * 1e-9;
             break;
         case CloudConvert::CloudType::AVIA:
-            livox_serializer_.deserialize_message(&sm, point_cloud.get());
-            convert_map_[topic_name]->Process(point_cloud, pcl_cloud);
+            livox_serializer_.deserialize_message(&sm, livox_cloud.get());
+            convert_map_[topic_name]->Process(livox_cloud, pcl_cloud);
+            stamp = livox_cloud->header.stamp.sec + livox_cloud->header.stamp.nanosec * 1e-9;
             break;
 
         default:
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "程序不支持该点云类型");
             return;
         }
-        double stamp = point_cloud->header.stamp.sec + point_cloud->header.stamp.nanosec * 1e-9;
         callback(pcl_cloud, stamp);
     };
 

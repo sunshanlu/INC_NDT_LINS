@@ -7,16 +7,16 @@
 
 using namespace inc_ndt_lins;
 
-IncNdt::Options ndt_options = {1.0, 1.0, 100000, 5.0, IncNdt::NearbyType::NEARBY6};    ///< 增量ndt配置项
-CloudConvert::Options convert_options = {CloudConvert::CloudType::VELO, 10, 1e-3, 32}; ///< 点云转换配置项
-IMUStaticInit::Options imu_static_options = {false, 1000, 10, 9.81, true};             ///< IMU静态初始化配置项
+IncNdt::Options ndt_options = {1.0, 1.0, 100000, 5.0, IncNdt::NearbyType::NEARBY6};  ///< 增量ndt配置项
+CloudConvert::Options convert_options = {CloudConvert::CloudType::AVIA, 3, 1e-9, 6}; ///< 点云转换配置项
+IMUStaticInit::Options imu_static_options = {false, 1000, 10, 9.81, true};           ///< IMU静态初始化配置项
 IEKF::Options iekf_options = {5, 1e-3, 1e-4, 1e-8, true};
 
 int main(int argc, char **argv) {
     Mat3d Ril;
     Vec3d til;
-    Ril << 0, -1, 0, 1, 0, 0, 0, 0, 1;
-    til << 0, 0, -0.28;
+    Ril << 1, 0, 0, 0, 1, 0, 0, 0, 1;
+    til << 0.04165, 0.02326, -0.0284;
 
     IncNdt::Ptr inc_ndt = std::make_shared<IncNdt>(ndt_options);
     IEKF::Ptr iekf = std::make_shared<IEKF>(iekf_options);
@@ -30,10 +30,10 @@ int main(int argc, char **argv) {
     iekf_lio->SetIMUInit(imu_static_init);
     iekf_lio->SetViewer(viewer);
 
-    BagIO io("/media/rookie-lu/新加卷/Dataset/ULHK/test2");
+    BagIO io("/media/rookie-lu/新加卷/Dataset/AVIA/HKU_MB_2020-09-20-13-34-51");
     io.SetPointCloudCallback([&](FullPointCloud::Ptr cloud, double stamp) { iekf_lio->AddCloud(cloud, stamp); },
-                             "/velodyne_points_0", convert_options)
-        .SetIMUCallback([&](IMU::Ptr imu) { iekf_lio->AddIMU(imu); }, "/imu/data")
+                             "/livox/lidar", convert_options)
+        .SetIMUCallback([&](IMU::Ptr imu) { iekf_lio->AddIMU(imu); }, "/livox/imu")
         .Go();
     return 0;
 }

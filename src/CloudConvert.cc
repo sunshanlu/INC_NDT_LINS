@@ -165,7 +165,7 @@ void CloudConvert::LivoxHandler(const LivoxCloud::SharedPtr &cloud_msg, FullPoin
             fpt.y = need_pt.y;
             fpt.z = need_pt.z;
             fpt.intensity = need_pt.reflectivity;
-            fpt.time = need_pt.offset_time * 1e-6;
+            fpt.time = need_pt.offset_time * options_.time_scale_;
             is_valid_pt[idx] = true;
             full_points[idx] = fpt;
         }

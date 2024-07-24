@@ -4,6 +4,7 @@
 #include "ESKF.h"
 #include "IMUPreintegration.h"
 #include "IncNdt.h"
+#include "Viewer.h"
 
 NAMESPACE_BEGIN
 
@@ -21,16 +22,20 @@ public:
         double ndt_angle_var_;    ///< 雷达角度标准差
     };
 
+    typedef std::shared_ptr<PreinteLio> Ptr;
+
     PreinteLio(Options options)
-        : imu_static_init_(nullptr)
+        : viewer_(nullptr)
+        , imu_static_init_(nullptr)
         , inc_ndt_(nullptr)
         , preint_(nullptr)
         , first_laser_(true)
-        , prior_info_(Mat15d::Identity() * 1e8)
+        , prior_info_(Mat15d::Identity())
         , ndt_info_(Mat6d::Zero())
-        , options_(std::move(options)) {
-        double ep2 = options_.ndt_position_var_ * options_.ndt_position_var_;
-        double ea2 = options_.ndt_angle_var_ * options.ndt_angle_var_;
+        , options_(std::move(options))
+        , frame_cnt_(0) {
+        double ep2 = 1.0 / (options_.ndt_position_var_ * options_.ndt_position_var_);
+        double ea2 = 1.0 / (options_.ndt_angle_var_ * options.ndt_angle_var_);
         ndt_info_.diagonal() << ep2, ep2, ep2, ea2, ea2, ea2;
     }
 
@@ -46,8 +51,8 @@ public:
     /// 设置IMU初始化器
     void SetImuInit(IMUStaticInit::Ptr imu_static_init) { imu_static_init_ = std::move(imu_static_init); }
 
-    /// 设置IMU预积分器
-    void SetImuPreint(IMUPreintegration::Ptr preint) { preint_ = std::move(preint); }
+    /// 设置可视化器
+    void SetViewer(Viewer::Ptr viewer) { viewer_ = std::move(viewer); }
 
 private:
     /// 点云去畸变
@@ -55,6 +60,9 @@ private:
 
     /// 位姿差值
     bool DifferencePose(const double &query_stamp, SE3d &Twl_t);
+
+    /// 速度标准化
+    void NormalizeVelocity();
 
     /// 优化
     void Optimize(const SE3d &ndt_pose);
@@ -66,6 +74,7 @@ private:
     NavState state_timei_; ///< i时刻的系统状态
     NavState state_timej_; ///< j时刻的系统状态
 
+    Viewer::Ptr viewer_;                 ///< 可视化器
     IMUStaticInit::Ptr imu_static_init_; ///< IMU的静态初始化器
     IncNdt::Ptr inc_ndt_;                ///< 增量ndt里程计
     IMUPreintegration::Ptr preint_;      ///< imu的预积分器
@@ -81,6 +90,7 @@ private:
     std::vector<double> stamp_query_; ///< 时间查询
 
     Options options_; ///< 预积分LIO配置选项
+    int frame_cnt_;   ///< 帧计数
 };
 
 NAMESPACE_END

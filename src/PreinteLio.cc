@@ -1,5 +1,6 @@
 #include <execution>
 
+#include <g2o/core/robust_kernel_impl.h>
 #include <pcl/common/transforms.h>
 
 #include "CloudConvert.h"
@@ -48,6 +49,9 @@ void PreinteLio::AddCloud(const FullPointCloud::Ptr &full_cloud, double laser_st
         state_timei_.bg_ = imu_static_init_->gyr_bias_;
         state_timei_.g_ = imu_static_init_->gravity_;
         state_timei_.v_ = Vec3d::Zero();
+
+        if (viewer_)
+            viewer_->SetPoseAndCloud(state_timei_.Twi_, imu_cloud);
     };
 
     cloud_buffer_.push_back(full_cloud);
@@ -61,36 +65,55 @@ void PreinteLio::AddCloud(const FullPointCloud::Ptr &full_cloud, double laser_st
  * @param imu 输入的imu数据
  */
 void PreinteLio::AddIMU(const IMU::Ptr &imu) {
-    if (!imu_static_init_->init_success_)
+    if (!imu_static_init_->init_success_) {
         imu_static_init_->AddIMU(imu);
+        return;
+    }
 
-    if (imu_static_init_->init_success_ && !first_laser_) {
-        if ((cloud_buffer_.size() < 2 && imu->stamp_ > end_time_buffer_[0]) ||
-            (cloud_buffer_.size() >= 2 && imu->stamp_ <= end_time_buffer_[1])) {
-            preint_->Integrate(imu, imu->stamp_);
-            state_timej_ = preint_->Predict(state_timei_);
-            Twi_query_.push_back(state_timej_.Twi_);
-            stamp_query_.push_back(imu->stamp_);
-        } else if (cloud_buffer_.size() >= 2 && imu->stamp_ > end_time_buffer_[1]) {
-            preint_->Integrate(imu, end_time_buffer_[1]);
-            state_timej_ = preint_->Predict(state_timei_);
+    if (first_laser_)
+        return;
 
-            PointCloud::Ptr laser_cloud = UndistortCloud(cloud_buffer_[1], start_time_buffer_[1]);
-            laser_cloud = VoxelCloud(laser_cloud, 0.1);
-            auto imu_cloud = pcl::make_shared<PointCloud>();
-            pcl::transformPointCloud(*laser_cloud, *imu_cloud, options_.Tli_.inverse().matrix().cast<float>());
+    if ((cloud_buffer_.size() == 1 && imu->stamp_ > end_time_buffer_.front()) ||
+        (cloud_buffer_.size() > 1 && imu->stamp_ > end_time_buffer_.front() && imu->stamp_ < end_time_buffer_[1])) {
+        preint_->Integrate(imu, imu->stamp_);
+        state_timej_ = preint_->Predict(state_timei_);
+        Twi_query_.push_back(state_timej_.Twi_);
+        stamp_query_.push_back(imu->stamp_);
+    } else if (cloud_buffer_.size() > 1 && imu->stamp_ > end_time_buffer_[1]) {
+        preint_->Integrate(imu, end_time_buffer_[1]);
+        state_timej_ = preint_->Predict(state_timei_);
 
-            SE3d init_pose = state_timej_.Twi_;
-            inc_ndt_->AlignG2O(imu_cloud, init_pose);
-            Optimize(init_pose);
+        PointCloud::Ptr laser_cloud = UndistortCloud(cloud_buffer_[1], start_time_buffer_[1]);
+        laser_cloud = VoxelCloud(laser_cloud, 0.1);
+        auto imu_cloud = pcl::make_shared<PointCloud>();
+        pcl::transformPointCloud(*laser_cloud, *imu_cloud, options_.Tli_.inverse().matrix().cast<float>());
 
-            if (IsKeyframe()) {
-                last_key_Twi_ = state_timej_.Twi_;
-                auto world_cloud = pcl::make_shared<PointCloud>();
-                pcl::transformPointCloud(*imu_cloud, *world_cloud, state_timej_.Twi_.matrix().cast<float>());
-                inc_ndt_->AddCloud(world_cloud);
-            }
+        SE3d init_pose = state_timej_.Twi_;
+        inc_ndt_->AlignG2O(imu_cloud, init_pose);
+        Optimize(init_pose);
+
+        preint_->Reset(state_timej_.bg_, state_timej_.ba_);
+        NormalizeVelocity();
+        state_timei_ = state_timej_;
+
+        auto world_cloud = pcl::make_shared<PointCloud>();
+        if (viewer_) {
+            pcl::transformPointCloud(*imu_cloud, *world_cloud, state_timej_.Twi_.matrix().cast<float>());
+            viewer_->SetPoseAndCloud(state_timej_.Twi_, world_cloud);
         }
+        ++frame_cnt_;
+        if (IsKeyframe()) {
+            // RCLCPP_INFO(rclcpp::get_logger("inc_ndt_lins"), "添加关键帧");
+            frame_cnt_ = 0;
+            last_key_Twi_ = state_timej_.Twi_;
+            if (!viewer_)
+                pcl::transformPointCloud(*imu_cloud, *world_cloud, state_timej_.Twi_.matrix().cast<float>());
+            inc_ndt_->AddCloud(world_cloud);
+        }
+
+        start_time_buffer_.pop_front();
+        end_time_buffer_.pop_front();
+        cloud_buffer_.pop_front();
     }
 }
 
@@ -192,6 +215,7 @@ void PreinteLio::Optimize(const SE3d &ndt_pose) {
     auto vTi = new SE3Vertex;
     vTi->setId(vertex_id++);
     vTi->setEstimate(state_timei_.Twi_);
+    vTi->setFixed(false);
     optimizer.addVertex(vTi);
 
     auto vTj = new SE3Vertex;
@@ -206,39 +230,32 @@ void PreinteLio::Optimize(const SE3d &ndt_pose) {
 
     auto vvj = new VelocityVertex;
     vvj->setId(vertex_id++);
-    vvj->setEstimate(state_timei_.v_);
+    vvj->setEstimate(state_timej_.v_);
     optimizer.addVertex(vvj);
 
     auto vbgi = new GyrBiasVertex;
     vbgi->setId(vertex_id++);
     vbgi->setEstimate(state_timei_.bg_);
+    vbgi->setFixed(true);
     optimizer.addVertex(vbgi);
 
     auto vbgj = new GyrBiasVertex;
     vbgj->setId(vertex_id++);
-    vbgj->setEstimate(state_timei_.bg_);
+    vbgj->setEstimate(state_timej_.bg_);
     optimizer.addVertex(vbgj);
 
     auto vbai = new AccBiasVertex;
     vbai->setId(vertex_id++);
     vbai->setEstimate(state_timei_.ba_);
+    vbai->setFixed(true);
     optimizer.addVertex(vbai);
 
     auto vbaj = new AccBiasVertex;
     vbaj->setId(vertex_id++);
-    vbaj->setEstimate(state_timei_.ba_);
+    vbaj->setEstimate(state_timej_.ba_);
     optimizer.addVertex(vbaj);
 
     /// 创建优化边
-    PriorEdge *prior_edge = new PriorEdge(state_timei_);
-    prior_edge->setId(edge_id++);
-    prior_edge->setInformation(prior_info_);
-    prior_edge->setVertex(0, vTi);
-    prior_edge->setVertex(1, vvi);
-    prior_edge->setVertex(2, vbgi);
-    prior_edge->setVertex(3, vbai);
-    optimizer.addEdge(prior_edge);
-
     IntegEdge *integ_edge = new IntegEdge(preint_);
     integ_edge->setId(edge_id++);
     integ_edge->setVertex(0, vTi);
@@ -247,11 +264,15 @@ void PreinteLio::Optimize(const SE3d &ndt_pose) {
     integ_edge->setVertex(3, vbai);
     integ_edge->setVertex(4, vTj);
     integ_edge->setVertex(5, vvj);
+    auto *rk = new g2o::RobustKernelHuber();
+    rk->setDelta(200.0);
+    integ_edge->setRobustKernel(rk);
+    integ_edge->computeError();
     optimizer.addEdge(integ_edge);
 
     GyrBiasEdge *gyr_bias = new GyrBiasEdge;
     gyr_bias->setId(edge_id++);
-    gyr_bias->setInformation(Mat3d::Identity() * 1e8);
+    gyr_bias->setInformation(Mat3d::Identity() * 1e4);
     gyr_bias->setVertex(0, vbgi);
     gyr_bias->setVertex(1, vbgj);
     optimizer.addEdge(gyr_bias);
@@ -263,12 +284,26 @@ void PreinteLio::Optimize(const SE3d &ndt_pose) {
     acc_bias->setVertex(1, vbaj);
     optimizer.addEdge(acc_bias);
 
+    PriorEdge *prior_edge = new PriorEdge(state_timei_);
+    prior_edge->setId(edge_id++);
+    prior_edge->setInformation(prior_info_);
+    prior_edge->setVertex(0, vTi);
+    prior_edge->setVertex(1, vvi);
+    prior_edge->setVertex(2, vbgi);
+    prior_edge->setVertex(3, vbai);
+    prior_edge->computeError();
+    optimizer.addEdge(prior_edge);
+
     NdtObserveEdge *ndt_edge = new NdtObserveEdge;
     ndt_edge->setId(edge_id++);
     ndt_edge->setInformation(ndt_info_);
     ndt_edge->setVertex(0, vTj);
+    ndt_edge->setMeasurement(ndt_pose);
+    ndt_edge->computeError();
     optimizer.addEdge(ndt_edge);
 
+    optimizer.setVerbose(false);
+    integ_edge->computeError();
     optimizer.initializeOptimization();
     optimizer.optimize(15);
 
@@ -282,6 +317,28 @@ void PreinteLio::Optimize(const SE3d &ndt_pose) {
     state_timej_.v_ = vvj->estimate();
     state_timej_.ba_ = vbaj->estimate();
     state_timej_.bg_ = vbgj->estimate();
+
+    /// 重置先验信息矩阵
+    Mat30d H = Mat30d::Zero();
+    H.block<24, 24>(0, 0) += integ_edge->GetHessian();
+    Mat6d Hgr = gyr_bias->GetHessian();
+    Mat6d Har = acc_bias->GetHessian();
+    H.block<3, 3>(9, 9) += Hgr.block<3, 3>(0, 0);
+    H.block<3, 3>(9, 24) += Hgr.block<3, 3>(0, 3);
+    H.block<3, 3>(24, 24) += Hgr.block<3, 3>(3, 3);
+    H.block<3, 3>(24, 9) += Hgr.block<3, 3>(3, 0);
+    H.block<3, 3>(12, 12) += Har.block<3, 3>(0, 0);
+    H.block<3, 3>(27, 27) += Har.block<3, 3>(3, 3);
+    H.block<3, 3>(12, 27) += Har.block<3, 3>(0, 3);
+    H.block<3, 3>(27, 12) += Har.block<3, 3>(3, 0);
+    H.block<15, 15>(0, 0) += prior_edge->GetHessian();
+    H.block<6, 6>(15, 15) += ndt_edge->GetHessian();
+    H = Marginalize(H, 0, 14);
+    prior_info_ = H.block<15, 15>(15, 15);
+
+    // RCLCPP_INFO_STREAM(rclcpp::get_logger("inc_ndt_lins"),
+    //                    state_timej_.Twi_.translation().transpose()
+    //                        << "\t" << state_timej_.Twi_.so3().unit_quaternion().coeffs().transpose());
 }
 
 /**
@@ -300,6 +357,27 @@ bool PreinteLio::IsKeyframe() {
         return true;
 
     return false;
+}
+
+/**
+ * @brief 标准差，不太清楚这么做的目的
+ *
+ */
+void PreinteLio::NormalizeVelocity() {
+    Vec3d v_body = state_timej_.Twi_.so3().inverse() * state_timej_.v_;
+    if (v_body[1] > 0)
+        v_body[1] = 0;
+    v_body[2] = 0;
+    if (v_body[1] < -2.0)
+        v_body[1] = -2.0;
+
+    if (v_body[0] > 0.1) {
+        v_body[0] = 0.1;
+    } else if (v_body[0] < -0.1) {
+        v_body[0] = -0.1;
+    }
+
+    state_timej_.v_ = state_timej_.Twi_.so3() * v_body;
 }
 
 NAMESPACE_END

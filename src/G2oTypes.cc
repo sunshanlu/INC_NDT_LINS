@@ -49,8 +49,8 @@ void IntegEdge::linearizeOplus() {
 
     /// 误差对Ti的雅可比
     _jacobianOplus[0].setZero();
-    _jacobianOplus[0].block<3, 3>(0, 3) = -jr_inv_eR * Rj_.matrix() * Ri_.matrix(); ///< eR / Ri
-    _jacobianOplus[0].block<3, 3>(6, 0) = -Ri_.inverse().matrix();                  ///< ep / pi
+    _jacobianOplus[0].block<3, 3>(0, 3) = -jr_inv_eR * Rj_.inverse().matrix() * Ri_.matrix(); ///< eR / Ri
+    _jacobianOplus[0].block<3, 3>(6, 0) = -Ri_.inverse().matrix();                            ///< ep / pi
 
     if (remove_gravity_) {
         _jacobianOplus[0].block<3, 3>(3, 3) = SO3d::hat(Ri_.inverse() * (vj_ - vi_));             ///< ev / Ri
@@ -71,9 +71,9 @@ void IntegEdge::linearizeOplus() {
     Mat3d exp_eR_inv = SO3d::exp(eR_).inverse().matrix();
     Mat3d jr_dR_dbg = SO3d::leftJacobianInverse(-preint_->dr_dbg_ * delta_bgi);
     _jacobianOplus[2].setZero();
-    _jacobianOplus[2].block<3, 3>(0, 0) = -jr_inv_eR * exp_eR_inv * jr_dR_dbg; ///< eR / bgi
-    _jacobianOplus[2].block<3, 3>(3, 0) = -preint_->dv_dbg_;                   ///< ev / bgi
-    _jacobianOplus[2].block<3, 3>(6, 0) = -preint_->dp_dbg_;                   ///< ep / bgi
+    _jacobianOplus[2].block<3, 3>(0, 0) = -jr_inv_eR * exp_eR_inv * jr_dR_dbg * preint_->dr_dbg_; ///< eR / bgi
+    _jacobianOplus[2].block<3, 3>(3, 0) = -preint_->dv_dbg_;                                      ///< ev / bgi
+    _jacobianOplus[2].block<3, 3>(6, 0) = -preint_->dp_dbg_;                                      ///< ep / bgi
 
     /// 误差对bai的雅可比
     _jacobianOplus[3].setZero();
@@ -87,7 +87,7 @@ void IntegEdge::linearizeOplus() {
 
     /// 误差对vj的雅可比
     _jacobianOplus[5].setZero();
-    _jacobianOplus[5].block<3, 3>(3, 0) = Ri_.matrix(); ///< ev / vj
+    _jacobianOplus[5].block<3, 3>(3, 0) = Ri_.inverse().matrix(); ///< ev / vj
 }
 
 /**
@@ -101,13 +101,13 @@ void PriorEdge::computeError() {
     auto vbai = dynamic_cast<AccBiasVertex *>(_vertices[3]);
 
     auto Ri = vTi->estimate().so3();
-    eR_ = (Ri * xi_.Twi_.so3().inverse()).log();
+    eR_ = (xi_.Twi_.so3().inverse() * Ri).log();
     Vec3d ev = vvi->estimate() - xi_.v_;
     Vec3d ep = vTi->estimate().translation() - xi_.Twi_.translation();
     Vec3d ebg = vbgi->estimate() - xi_.bg_;
     Vec3d eba = vbai->estimate() - xi_.ba_;
 
-    _error << eR_, ev, ep, ebg, eba;
+    _error << ep, eR_, ev, ebg, eba;
 }
 
 /**
@@ -116,11 +116,11 @@ void PriorEdge::computeError() {
  */
 void PriorEdge::linearizeOplus() {
     _jacobianOplus[0].setZero();
-    _jacobianOplus[0].block<3, 3>(0, 3) = SO3d::leftJacobianInverse(-eR_) * xi_.Twi_.so3().matrix();
-    _jacobianOplus[0].block<3, 3>(6, 0) = Mat3d::Identity();
+    _jacobianOplus[0].block<3, 3>(0, 0) = Mat3d::Identity();
+    _jacobianOplus[0].block<3, 3>(3, 3) = SO3d::leftJacobianInverse(-eR_);
 
     _jacobianOplus[1].setZero();
-    _jacobianOplus[1].block<3, 3>(3, 0) = Mat3d::Identity();
+    _jacobianOplus[1].block<3, 3>(6, 0) = Mat3d::Identity();
 
     _jacobianOplus[2].setZero();
     _jacobianOplus[2].block<3, 3>(9, 0) = Mat3d::Identity();
@@ -135,7 +135,7 @@ void PriorEdge::linearizeOplus() {
  */
 void SE3Edge::computeError() {
     auto vTj = dynamic_cast<SE3Vertex *>(_vertices[0]);
-    eR_ = (vTj->estimate().so3() * _measurement.so3().inverse()).log();
+    eR_ = (_measurement.so3().inverse() * vTj->estimate().so3()).log();
     Vec3d ep = vTj->estimate().translation() - _measurement.translation();
     _error << ep, eR_;
 }
@@ -147,7 +147,7 @@ void SE3Edge::computeError() {
 void SE3Edge::linearizeOplus() {
     _jacobianOplusXi.setZero();
     _jacobianOplusXi.block<3, 3>(0, 0) = Mat3d::Identity();
-    _jacobianOplusXi.block<3, 3>(3, 3) = SO3d::leftJacobianInverse(-eR_) * _measurement.so3().matrix();
+    _jacobianOplusXi.block<3, 3>(3, 3) = SO3d::leftJacobianInverse(-eR_);
 }
 
 NAMESPACE_END

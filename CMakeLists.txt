@@ -3,9 +3,12 @@ project(inc_ndt_lins)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY
+    ${PROJECT_SOURCE_DIR}/lib/${CMAKE_BUILD_TYPE})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
+    ${PROJECT_SOURCE_DIR}/lib/${CMAKE_BUILD_TYPE})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 add_subdirectory(${PROJECT_SOURCE_DIR}/thirdparty/livox_ros_driver2)
@@ -25,8 +28,18 @@ find_package(TBB REQUIRED)
 
 file(GLOB SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc)
 add_library(inc_ndt_lins ${SRC_FILES})
-target_link_libraries(inc_ndt_lins ${PCL_LIBRARIES} Sophus::Sophus g2o_core
-                      g2o_stuff livox_ros_driver2 TBB::tbb)
+target_link_libraries(
+    inc_ndt_lins
+    ${PCL_LIBRARIES}
+    Sophus::Sophus
+    g2o_core
+    g2o_stuff
+    livox_ros_driver2
+    TBB::tbb)
+set_target_properties(
+    inc_ndt_lins PROPERTIES RUNTIME_LIBRARY_DIRS
+                            ${PROJECT_SOURCE_DIR}/lib/${CMAKE_BUILD_TYPE})
+
 ament_target_dependencies(inc_ndt_lins rclcpp sensor_msgs rosbag2_cpp)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/example)

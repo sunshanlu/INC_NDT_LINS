@@ -18,6 +18,9 @@ public:
         : preint_(std::move(preint)) {
         resize(6);
         setInformation(preint_->GetInformation());
+        remove_gravity_ = preint_->options_.remove_gravity_;
+        gravity_ = preint_->options_.gravity_;
+        dt_ = preint_->integrate_time_;
     }
 
     void computeError() override;
@@ -27,6 +30,19 @@ public:
     bool write(std::ostream &) const override { return false; }
 
     bool read(std::istream &) override { return false; }
+
+    /// 获取预积分因子的海塞矩阵
+    Mat24d GetHessian() {
+        linearizeOplus();
+        Eigen::Matrix<double, 9, 24> J = Eigen::Matrix<double, 9, 24>::Zero();
+        J.block<9, 6>(0, 0) = _jacobianOplus[0];  ///< de / dTi
+        J.block<9, 3>(0, 6) = _jacobianOplus[1];  ///< de / dvi
+        J.block<9, 3>(0, 9) - _jacobianOplus[2];  ///< de / dbgi
+        J.block<9, 3>(0, 12) = _jacobianOplus[3]; ///< de / dbai
+        J.block<9, 6>(0, 15) = _jacobianOplus[4]; ///< de / dTj
+        J.block<9, 3>(0, 21) = _jacobianOplus[5]; ///< de / dvj
+        return J.transpose() * _information * J;
+    }
 
 private:
     IMUPreintegration::Ptr preint_; ///< 预积分器
@@ -59,6 +75,17 @@ public:
     bool write(std::ostream &) const override { return false; }
 
     bool read(std::istream &) override { return false; }
+
+    /// 获取先验因子的海塞矩阵
+    Mat15d GetHessian() {
+        linearizeOplus();
+        Mat15d J = Mat15d::Zero();
+        J.block<15, 6>(0, 0) = _jacobianOplus[0];
+        J.block<15, 3>(0, 6) = _jacobianOplus[1];
+        J.block<15, 3>(0, 9) = _jacobianOplus[2];
+        J.block<15, 3>(0, 12) = _jacobianOplus[3];
+        return J.transpose() * _information * J;
+    }
 
 private:
     NavState xi_; ///< i时刻的观测
@@ -108,6 +135,16 @@ public:
         _jacobianOplusXi = Mat3d::Identity();
         _jacobianOplusXj = -Mat3d::Identity();
     }
+
+    /// 获取随机游走因子的海塞矩阵
+    Mat6d GetHessian() {
+        linearizeOplus();
+        Mat3_6d J = Mat3_6d::Zero();
+        J.block<3, 3>(0, 0) = _jacobianOplusXi;
+        J.block<3, 3>(0, 3) = _jacobianOplusXj;
+
+        return J.transpose() * _information * J;
+    }
 };
 
 typedef Vec3dEdge AccBiasEdge;
@@ -125,6 +162,12 @@ public:
     void computeError() override;
 
     void linearizeOplus() override;
+
+    /// 获取SE3观测因子的海塞矩阵
+    Mat6d GetHessian() {
+        linearizeOplus();
+        return _jacobianOplusXi.transpose() * _information * _jacobianOplusXi;
+    }
 
 private:
     Vec3d eR_;

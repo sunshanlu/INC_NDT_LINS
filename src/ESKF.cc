@@ -198,7 +198,7 @@ void IMUStaticInit::AddIMU(const IMU::Ptr &imu) {
         Mat3d acc_cov = Mat3d::Zero(), gyr_cov = Mat3d::Zero();
         ComputeMeanAndCov<Vec3d, IMU::Ptr, Mat3d>(imu_buffer_, acc_mean, acc_cov,
                                                   [](const IMU::Ptr &imu) -> Vec3d { return imu->acc_; });
-        ComputeMeanAndCov<Vec3d, IMU::Ptr, Mat3d>(imu_buffer_, gyr_mean, gyr_cov,
+        ComputeMeanAndCov<Vec3d, IMU::Ptr, Mat3d>(imu_buffer_, gyr_mean, gyr_cov, 
                                                   [](const IMU::Ptr &imu) -> Vec3d { return imu->gyr_; });
 
         gravity_ = -acc_mean / acc_mean.norm() * options_.gravity_norm_;
