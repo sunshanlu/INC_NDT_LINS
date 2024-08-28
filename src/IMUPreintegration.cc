@@ -8,6 +8,8 @@ NAMESPACE_BEGIN
  *      1. 更新积分状态，dr、dv和dp
  *      2. 更新积分模型的雅可比矩阵
  *      3. 更新积分状态对偏置ba、bg的雅可比矩阵
+ * @param imu       输入的imu数据
+ * @param stamp     积分的时间戳
  *
  * @note 注意更新状态时的顺序问题
  */
@@ -33,8 +35,8 @@ void IMUPreintegration::Integrate(const IMU::Ptr &imu, double stamp) {
  *      2. dp和dv需要注意更新顺序
  */
 void IMUPreintegration::UpdateDeltaState() {
-    last_dR_ = dR_;
-    dp_ = dp_ + dv_ * dt_ + 0.5 * last_dR_.matrix() * acc_remove_bias_ * dt_ * dt_;
+    last_dR_ = dR_.matrix();
+    dp_ = dp_ + dv_ * dt_ + 0.5 * last_dR_ * acc_remove_bias_ * dt_ * dt_;
     dv_ = dv_ + last_dR_ * acc_remove_bias_ * dt_;
     delta_dr_ = SO3d::exp(gyr_remove_bias_ * dt_);
     dR_ = dR_ * delta_dr_;
@@ -49,13 +51,13 @@ void IMUPreintegration::UpdateCov() {
     Mat9_6d B = Mat9_6d::Zero();
 
     A.block<3, 3>(0, 0) = delta_dr_.inverse().matrix();
-    A.block<3, 3>(3, 0) = -last_dR_.matrix() * hat_acc_ * dt_;
-    A.block<3, 3>(6, 0) = -0.5 * last_dR_.matrix() * hat_acc_ * dt_ * dt_;
+    A.block<3, 3>(3, 0) = -last_dR_ * hat_acc_ * dt_;
+    A.block<3, 3>(6, 0) = -0.5 * last_dR_ * hat_acc_ * dt_ * dt_;
     A.block<3, 3>(6, 3) = Mat3d::Identity() * dt_;
 
     B.block<3, 3>(0, 0) = SO3d::leftJacobian(-gyr_remove_bias_ * dt_) * dt_;
-    B.block<3, 3>(3, 3) = last_dR_.matrix() * dt_;
-    B.block<3, 3>(6, 3) = 0.5 * last_dR_.matrix() * dt_ * dt_;
+    B.block<3, 3>(3, 3) = last_dR_ * dt_;
+    B.block<3, 3>(6, 3) = 0.5 * last_dR_ * dt_ * dt_;
 
     cov_ = A * cov_ * A.transpose() + B * bias_cov_ * B.transpose();
 }
@@ -65,10 +67,10 @@ void IMUPreintegration::UpdateCov() {
  *
  */
 void IMUPreintegration::UpdateJacobian() {
-    dp_dbg_ = dp_dbg_ + dv_dbg_ * dt_ - 0.5 * last_dR_.matrix() * hat_acc_ * dr_dbg_ * dt_ * dt_;
-    dp_dba_ = dp_dba_ + dv_dba_ * dt_ - 0.5 * last_dR_.matrix() * dt_ * dt_;
-    dv_dbg_ = dv_dbg_ - last_dR_.matrix() * hat_acc_ * dr_dbg_ * dt_;
-    dv_dba_ = dv_dba_ - last_dR_.matrix() * dt_;
+    dp_dbg_ = dp_dbg_ + dv_dbg_ * dt_ - 0.5 * last_dR_ * hat_acc_ * dr_dbg_ * dt_ * dt_;
+    dp_dba_ = dp_dba_ + dv_dba_ * dt_ - 0.5 * last_dR_ * dt_ * dt_;
+    dv_dbg_ = dv_dbg_ - last_dR_* hat_acc_ * dr_dbg_ * dt_;
+    dv_dba_ = dv_dba_ - last_dR_ * dt_;
     dr_dbg_ = delta_dr_.inverse().matrix() * dr_dbg_ - SO3d::leftJacobian(-gyr_remove_bias_ * dt_) * dt_;
 }
 

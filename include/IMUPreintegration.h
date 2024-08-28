@@ -105,7 +105,7 @@ private:
     double dt_;             ///< 每次积分时的子时间
     double integrate_time_; ///< 积分时间
 
-    SO3d last_dR_;  ///< 预积分之前的dr
+    Mat3d last_dR_; ///< 预积分之前的dr
     SO3d delta_dr_; ///< 旋转部分的更新量
     Mat3d hat_acc_; ///< hat acc_remove_bias的值
 

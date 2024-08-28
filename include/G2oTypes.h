@@ -93,7 +93,7 @@ private:
     Vec3d eR_; ///< 旋转部分残差，求雅可比使用
 };
 
-/// 三维顶点边
+/// 三维顶点
 class Vec3dVertex : public g2o::BaseVertex<3, Vec3d> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

@@ -28,9 +28,9 @@ void IntegEdge::computeError() {
     Vec3d dp = preint_->GetDeltaP(bgi_, bai_);
 
     eR_ = (dR.inverse() * (Ri_.inverse() * Rj_)).log();
-    ev_ = Ri_.inverse().matrix() * (vj_ - vi_) - dv;
+    ev_ = Ri_.inverse() * (vj_ - vi_) - dv;
     if (!remove_gravity_)
-        ev_ -= Ri_.inverse().matrix() * gravity_ * dt_;
+        ev_ -= Ri_.inverse() * gravity_ * dt_;
 
     ep_ = Ri_.inverse() * (pj_ - pi_ - vi_ * dt_) - dp;
     if (!remove_gravity_)
@@ -69,7 +69,7 @@ void IntegEdge::linearizeOplus() {
     /// 误差对bgi的雅可比
     Vec3d delta_bgi = bgi_ - preint_->gyr_bias_;
     Mat3d exp_eR_inv = SO3d::exp(eR_).inverse().matrix();
-    Mat3d jr_dR_dbg = SO3d::leftJacobianInverse(-preint_->dr_dbg_ * delta_bgi);
+    Mat3d jr_dR_dbg = SO3d::leftJacobian(-preint_->dr_dbg_ * delta_bgi);
     _jacobianOplus[2].setZero();
     _jacobianOplus[2].block<3, 3>(0, 0) = -jr_inv_eR * exp_eR_inv * jr_dR_dbg * preint_->dr_dbg_; ///< eR / bgi
     _jacobianOplus[2].block<3, 3>(3, 0) = -preint_->dv_dbg_;                                      ///< ev / bgi
